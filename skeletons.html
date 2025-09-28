@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Defesa contra Esqueletos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #1a202c;
+            color: #e2e8f0;
+            overflow: hidden;
+        }
+        canvas {
+            background: url('https://placehold.co/800x600/2d3748/1a202c?text=Carregando...') center center no-repeat;
+            background-size: cover;
+            border: 4px solid #4a5568;
+            border-radius: 0.5rem;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            cursor: crosshair;
+        }
+        .game-ui {
+            text-shadow: 2px 2px 4px #000;
+        }
+        #modal {
+            background-color: rgba(26, 32, 44, 0.9);
+        }
+        #levelUpNotice {
+            transition: opacity 1s ease-in-out;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center h-screen">
+
+    <div class="text-center">
+        <div id="levelUpNotice" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-5xl text-yellow-400 game-ui opacity-0 pointer-events-none">
+            Dificuldade Aumentou!
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- Modal de Start/Game Over -->
+        <div id="modal" class="fixed inset-0 flex-col items-center justify-center flex">
+            <div class="bg-gray-700 p-8 rounded-lg shadow-2xl text-center border-4 border-gray-600">
+                <h1 id="modalTitle" class="text-4xl font-bold mb-2">Skeleton Defense</h1>
+                <p id="modalScore" class="text-2xl mb-6">Click to Start!</p>
+                <button id="startGameBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded text-2xl transition duration-300 transform hover:scale-105">
+                    Start Game
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuração Inicial ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalScore = document.getElementById('modalScore');
+        const startGameBtn = document.getElementById('startGameBtn');
+        const levelUpNotice = document.getElementById('levelUpNotice');
+
+        canvas.width = 800;
+        canvas.height = 600;
+
+        // --- Variáveis do Jogo ---
+        let score = 0;
+        let highScore = localStorage.getItem('skeletonSlayerHighScore') || 0;
+        let enemies = [];
+        let frame = 0;
+        let spawnRate = 200;
+        let animationId;
+        let isGameRunning = false;
+        
+        // --- Variáveis de Dificuldade ---
+        let scoreThreshold = 400;
+        let globalSpeedMultiplier = 1;
+
+
+        const spriteSheet = new Image();
+        spriteSheet.src = 'sprites/skeletons.png';
+        
+        spriteSheet.onload = () => {
+             canvas.style.background = `
+                linear-gradient(rgba(45, 55, 72, 0.8), rgba(26, 32, 44, 1)),
+                url('https://static.vecteezy.com/ti/vetor-gratis/p1/15644996-fundo-de-de-textura-de-grama-verde-gramado-vetor.jpg')`;
+             canvas.style.backgroundSize = 'cover';
+             canvas.style.backgroundPosition = 'bottom';
+        };
+        
+        spriteSheet.onerror = () => {
+            console.error("Error on loading 'sprites/skeletons.png'.");
+            canvas.style.background = 'red';
+        }
+
+        const spriteWidth = 48;
+        const spriteHeight = 48;
+
+        // --- Classes e Objetos ---
+        class Skeleton {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type;
+                this.width = spriteWidth * 1.5;
+                this.height = spriteHeight * 1.5;
+                this.animationFrame = 0;
+                this.frameTick = 0;
+                this.isHit = false;
+                this.hitTimer = 0;
+                
+                const typeProperties = [];
+                // type 0 = Normal (calça marrom)
+                typeProperties[0] = { xOffset: 0, speed: 1, points: 15, health: 1 };
+                // type 1 = Calça Vermelha - Mais rápido
+                typeProperties[1] = { xOffset: 3, speed: 2, points: 20, health: 1 };
+                // type 2 = Olhos vermelhos - Rápido e valioso
+                typeProperties[2] = { xOffset: 9, speed: 2.5, points: 30, health: 2 };
+                // type 3 = Calça Roxa - Normal - 2 cliques para morrer
+                typeProperties[3] = { xOffset: 6, speed: 1.2, points: 20, health: 2 };
+
+                const props = typeProperties[this.type];
+                this.frameXOffset = props.xOffset;
+                this.speed = props.speed;
+                this.points = props.points;
+                this.health = props.health;
+                this.frameY = 0; 
+            }
+
+            takeDamage() {
+                this.health--;
+                if (this.health > 0) {
+                    this.isHit = true;
+                    this.hitTimer = 5; // Duração do flash de dano
+                }
+            }
+
+            update() {
+                this.y += this.speed * globalSpeedMultiplier;
+
+                if (this.isHit) {
+                    this.hitTimer--;
+                    if (this.hitTimer <= 0) {
+                        this.isHit = false;
+                    }
+                }
+
+                this.frameTick++;
+                if (this.frameTick % 10 === 0) {
+                    this.animationFrame = (this.animationFrame + 1) % 3;
+                }
+            }
+
+            draw() {
+                const sx = (this.frameXOffset + this.animationFrame) * spriteWidth;
+                const sy = this.frameY * spriteHeight;
+                
+                ctx.save();
+                if (this.isHit) {
+                    // Efeito de flash ao tomar dano
+                    ctx.filter = 'brightness(1.8) drop-shadow(0 0 5px red)';
+                }
+                
+                ctx.drawImage(
+                    spriteSheet, sx, sy, spriteWidth, spriteHeight,
+                    this.x, this.y, this.width, this.height
+                );
+
+                ctx.restore();
+            }
+        }
+        
+        // --- Funções do Jogo ---
+        function drawUI() {
+            ctx.font = "20px 'Press Start 2P'";
+            ctx.fillStyle = "#e2e8f0";
+            ctx.shadowColor = 'black';
+            ctx.shadowBlur = 4;
+            
+            // Pontuação
+            ctx.textAlign = "left";
+            ctx.fillText("Score: " + score, 20, 40);
+
+            // High Score
+            ctx.textAlign = "right";
+            ctx.fillText("High Score: " + highScore, canvas.width - 20, 40);
+            
+            ctx.shadowBlur = 0; // Reset shadow for other drawings
+        }
+
+        function spawnEnemy() {
+            const x = Math.random() * (canvas.width - spriteWidth * 1.5);
+            const y = -spriteHeight * 1.5;
+            const type = Math.floor(Math.random() * 4);
+            enemies.push(new Skeleton(x, y, type));
+        }
+
+        function showLevelUp() {
+            levelUpNotice.style.opacity = 1;
+            setTimeout(() => {
+                levelUpNotice.style.opacity = 0;
+            }, 1500);
+        }
+
+        function init() {
+            score = 0;
+            enemies = [];
+            frame = 0;
+            spawnRate = 200;
+            scoreThreshold = 400;
+            globalSpeedMultiplier = 1;
+            isGameRunning = true;
+            modal.style.display = 'none';
+            animate();
+        }
+
+        function endGame() {
+            isGameRunning = false;
+            cancelAnimationFrame(animationId);
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('skeletonSlayerHighScore', highScore);
+            }
+            modal.style.display = 'flex';
+            modalTitle.textContent = 'Game Over!';
+            modalScore.textContent = `Your Score: ${score}`;
+            startGameBtn.textContent = 'Play Again';
+        }
+
+        // --- Loop Principal do Jogo ---
+        function animate() {
+            if (!isGameRunning) return;
+
+            animationId = requestAnimationFrame(animate);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            frame++;
+            if (frame % Math.floor(spawnRate) === 0) {
+                spawnEnemy();
+            }
+
+            // Aumenta a dificuldade com a pontuação
+            if (score >= scoreThreshold) {
+                scoreThreshold += 400;
+                globalSpeedMultiplier += 0.2;
+                if (spawnRate > 40) {
+                    spawnRate -= 20;
+                }
+                showLevelUp();
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                enemy.update();
+                enemy.draw();
+
+                if (enemy.y > canvas.height) {
+                    endGame();
+                }
+            }
+
+            drawUI(); // Desenha a UI no canvas
+        }
+
+        // --- Event Listeners ---
+        canvas.addEventListener('click', (event) => {
+            if(!isGameRunning) return;
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                if (
+                    mouseX >= enemy.x && mouseX <= enemy.x + enemy.width &&
+                    mouseY >= enemy.y && mouseY <= enemy.y + enemy.height
+                ) {
+                    enemy.takeDamage();
+
+                    if (enemy.health <= 0) {
+                        score += enemy.points;
+                        enemies.splice(i, 1);
+                    }
+                    
+                    break;
+                }
+            }
+        });
+        
+        startGameBtn.addEventListener('click', () => {
+            init();
+        });
+
+    </script>
+</body>
+</html>
+
