@@ -1,4 +1,4 @@
-# 🧟 Defesa contra Esqueletos
+# 💀 Defesa contra Esqueletos
 
 Este é um **mini-jogo de navegador** simples e divertido onde o seu objetivo é defender-se de hordas de esqueletos que avançam.  
 Clique nos inimigos para derrotá-los antes que eles cheguem à parte inferior da tela e tente obter a maior pontuação possível!
@@ -28,10 +28,10 @@ Clique nos inimigos para derrotá-los antes que eles cheguem à parte inferior d
 ## 🕹️ Funcionalidades
 
 - **Inimigos Variados** → 4 tipos diferentes de esqueletos:
-  - 🟤 **Esqueleto (calça marrom):** Um inimigo padrão.  
-  - 🔴 **Esqueleto (calça vermelha):** Um inimigo rápido.  
-  - 👁️ **Esqueleto (olhos vermelhos):** Rápido e vale mais pontos porem precisa de dois cliques para morrer.  
+  - 🟤 **Esqueleto (calça marrom claro):** Um inimigo padrão.
   - 🟣 **Esqueleto (calça roxa):** Um inimigo padrão que precisa de dois cliques para morrer.  
+  - 🔴 **Esqueleto (calça vermelha):** Um inimigo rápido.  
+  - 🟤 **Esqueleto (calça marrom escuro):** Um inimigo rápido e vale mais pontos porem precisa de dois cliques para morrer.  
 
 - **Dificuldade Progressiva** → A cada **400 pontos**, a velocidade e a frequência dos inimigos aumentam.  
 - **Sistema de Pontuação** → Ganhe pontos por cada esqueleto derrotado.  
